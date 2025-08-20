@@ -152,60 +152,102 @@ def main_page():
     st.markdown("# 오늘의 운세 알아보기")
     st.markdown("## 당신의 기분은 어떤 색인가요?")
 
-    # 색깔 버튼들을 3열로 나누어 표시
+    # 각 색상에 대한 버튼 역할을 하는 마크다운 링크를 생성합니다.
+    # HTML과 CSS를 사용하여 원 모양과 색상을 적용합니다.
+    st.markdown("""
+        <style>
+            .color-box {
+                width: 90px;
+                height: 90px;
+                border-radius: 15px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                cursor: pointer;
+                text-decoration: none;
+                color: black !important;
+                margin: 5px;
+                padding: 10px;
+                transition: transform 0.2s;
+                border: 1px solid #ddd;
+            }
+            .color-box:hover {
+                transform: scale(1.05);
+            }
+            .color-box-content {
+                text-align: center;
+            }
+            .circle {
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                margin-bottom: 5px;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     cols = st.columns(3)
     
     for i, color in enumerate(COLORS):
-        with cols[i % 3]: # 각 열에 순서대로 버튼을 배치합니다.
-            # HTML 마크다운을 사용하여 색상 원 (●)과 색깔 이름을 버튼 레이블로 만듭니다.
-            # unsafe_allow_html=True를 사용하여 HTML 렌더링을 허용합니다.
-            # 검정색 원의 경우 텍스트 색상을 흰색으로 하여 잘 보이게 합니다.
-            text_color = "white" if color == "검정" else "black"
-            button_label = f"<span style='color: {COLOR_HEX[color]}; font-size: 30px;'>●</span><br><span style='color: {text_color};'>**{color}**</span>"
-            
-            # 버튼 클릭 시 해당 색깔의 운세 페이지로 이동
-            if st.button(button_label, key=f"color_button_{color}", unsafe_allow_html=True):
-                st.session_state.selected_color = color # 선택된 색상을 세션에 저장합니다.
-                # 사용자 키가 있는 경우, 선택된 색상을 기록에 저장합니다.
-                if st.session_state.user_key:
-                    save_selected_color(st.session_state.user_key, color)
-                set_page('fortune') # 운세 페이지로 이동합니다.
-    
-    st.write("---") # 구분선 추가
+        with cols[i % 3]:
+            # 색상별 CSS 클래스 추가
+            bg_color = COLOR_HEX[color]
+            text_color = "black" if color == "흰색" or color == "노랑" else "white"
 
-    # 사용자 키로 접속한 경우, 해당 사용자의 운세 기록을 표시합니다.
+            # <a> 태그를 사용하여 클릭 가능한 링크로 만들고, 쿼리 매개변수를 추가합니다.
+            st.markdown(
+                f"""
+                <a href="?selected_color={color}" style="text-decoration: none;">
+                    <div class="color-box" style="background-color: {bg_color}; color: {text_color};">
+                        <div class="color-box-content">
+                            <b>{color}</b>
+                        </div>
+                    </div>
+                </a>
+                """,
+                unsafe_allow_html=True
+            )
+
+    # 쿼리 매개변수를 확인하여 페이지 이동 처리
+    query_params = st.query_params
+    if "selected_color" in query_params:
+        selected_color = query_params["selected_color"]
+        if selected_color in COLORS:
+            st.session_state.selected_color = selected_color
+            if st.session_state.user_key:
+                save_selected_color(st.session_state.user_key, selected_color)
+            set_page('fortune')
+            # 쿼리 매개변수 제거 (중복 실행 방지)
+            del st.query_params["selected_color"]
+            st.experimental_rerun()
+
+    st.write("---")
+
+    # 기존의 키 입력 및 기록 표시 로직은 그대로 유지됩니다.
     if st.session_state.user_key:
         st.subheader(f"'{st.session_state.user_key}'님의 운세 기록")
-        # 현재 키에 해당하는 사용자 데이터를 가져옵니다. 없으면 빈 딕셔너리 반환합니다.
         user_data_for_key = st.session_state.selected_color_data.get(st.session_state.user_key, {})
         
         if user_data_for_key:
             st.write("최근 30일간 선택한 색상:")
             today = datetime.date.today()
-            
-            # 기록된 날짜들을 파싱하여 유효한 날짜만 필터링하고, 최근 30일 이내의 기록만 가져옵니다.
             parsed_dates_info = []
             for date_str in user_data_for_key.keys():
                 try:
                     parsed_date = datetime.date.fromisoformat(date_str)
                     parsed_dates_info.append((parsed_date, date_str))
                 except ValueError:
-                    # 유효하지 않은 날짜 형식은 무시합니다.
                     pass
-            
-            # 날짜를 최신 순으로 정렬합니다.
             recent_dates_info = sorted(
                 [(d_obj, d_str) for d_obj, d_str in parsed_dates_info if (today - d_obj).days <= 30],
                 key=lambda x: x[0], reverse=True
             )
-            
-            # 각 날짜와 선택된 색상을 목록으로 표시
             for date_obj, date_str in recent_dates_info:
                 color = user_data_for_key[date_str]
-                # 날짜와 선택된 색깔을 색깔이 적용된 텍스트로 표시합니다.
                 st.markdown(f"- **{date_str}**: <span style='color: {COLOR_HEX[color]}; font-weight: bold;'>{color}</span>", unsafe_allow_html=True)
         else:
-            st.info("아직 저장된 운세 기록이 없습니다.") # 기록이 없을 때 메시지를 표시합니다.
+            st.info("아직 저장된 운세 기록이 없습니다.")
     
 def fortune_page():
     """선택된 색깔에 따른 오늘의 운세를 보여주는 화면입니다."""
